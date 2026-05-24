@@ -1,5 +1,4 @@
-// Deprecated: moved to github.com/exclavenetwork/sing-juicity.
-module github.com/dyhkwong/sing-juicity
+module github.com/exclavenetwork/sing-juicity
 
 go 1.24.0
 
