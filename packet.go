@@ -75,7 +75,7 @@ func (c *udpPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 	if err != nil {
 		return
 	}
-	if destination.IsFqdn() {
+	if destination.IsDomain() {
 		addr = destination
 	} else {
 		addr = destination.UDPAddr()
