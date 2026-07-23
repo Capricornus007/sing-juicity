@@ -18,8 +18,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 package juicity
 
 import (
-	"bytes"
 	"context"
+	"crypto/hmac"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -45,13 +45,12 @@ type ServiceOptions struct {
 	Context           context.Context
 	Logger            logger.Logger
 	TLSConfig         tls.ServerConfig
+	QUICConfig        *quic.Config
 	QUICOptions       qtls.QUICOptions
 	CongestionControl string
 	AuthTimeout       time.Duration
 	// UDPTimeout  time.Duration todo?
 	Handler ServiceHandler
-
-	allowAllCongestionControl bool // do not export
 }
 
 type ServiceHandler interface {
@@ -78,22 +77,26 @@ func NewService[U comparable](options ServiceOptions) (*Service[U], error) {
 		// Official Juicity server uses 10 seconds
 		options.AuthTimeout = 10 * time.Second
 	}
-	quicConfig := &quic.Config{
-		DisablePathMTUDiscovery: !(runtime.GOOS == "windows" || runtime.GOOS == "linux" || runtime.GOOS == "android" || runtime.GOOS == "darwin"),
-		EnableDatagrams:         true,
-		MaxIncomingStreams:      1 << 60,
-		MaxIncomingUniStreams:   1 << 60,
-		DisablePathManager:      true,
-	}
-	qtls.ApplyQUICOptions(quicConfig, options.QUICOptions)
-	switch options.CongestionControl {
-	case "":
-		options.CongestionControl = "bbr"
-	case "cubic", "new_reno", "bbr", "bbr2":
-	default:
-		if !options.allowAllCongestionControl {
-			return nil, exceptions.New("unknown congestion control algorithm: ", options.CongestionControl)
+	quicConfig := options.QUICConfig
+	if quicConfig == nil {
+		quicConfig = &quic.Config{
+			DisablePathMTUDiscovery: !(runtime.GOOS == "windows" || runtime.GOOS == "linux" || runtime.GOOS == "android" || runtime.GOOS == "darwin"),
+			EnableDatagrams:         true,
+			MaxIncomingStreams:      1 << 60,
+			MaxIncomingUniStreams:   1 << 60,
+			DisablePathManager:      true,
 		}
+		qtls.ApplyQUICOptions(quicConfig, options.QUICOptions)
+	}
+	congestionControl := options.CongestionControl
+	switch congestionControl {
+	case "":
+		congestionControl = "bbr"
+	case "cubic", "new_reno", "bbr", "bbr2":
+	case "bbr_meta_v1", "bbr_quiche", "bbr2_aggressive":
+		// sing-quic private names
+	default:
+		return nil, exceptions.New("unknown congestion control algorithm: ", options.CongestionControl)
 	}
 	return &Service[U]{
 		ctx:               options.Context,
@@ -101,7 +104,7 @@ func NewService[U comparable](options ServiceOptions) (*Service[U], error) {
 		tlsConfig:         options.TLSConfig, // servers need to set ALPN `h3` themselves
 		quicConfig:        quicConfig,
 		userMap:           make(map[[16]byte]U),
-		congestionControl: options.CongestionControl,
+		congestionControl: congestionControl,
 		authTimeout:       options.AuthTimeout,
 		handler:           options.Handler,
 	}, nil
@@ -237,7 +240,7 @@ func (s *serverSession[U]) handleUniStream(stream *quic.ReceiveStream) error {
 		if err != nil {
 			return exceptions.Cause(err, "authentication: export keying material")
 		}
-		if !bytes.Equal(token, buffer.Range(2+16, AuthenticateLen)) {
+		if !hmac.Equal(token, buffer.Range(2+16, AuthenticateLen)) {
 			return exceptions.New("authentication: token mismatch")
 		}
 		s.authUser = user

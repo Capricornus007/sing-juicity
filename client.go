@@ -42,11 +42,10 @@ type ClientOptions struct {
 	ServerAddress     metadata.Socksaddr
 	QUICOptions       qtls.QUICOptions
 	TLSConfig         tls.Config
+	QUICConfig        *quic.Config
 	UUID              [16]byte
 	Password          string
 	CongestionControl string
-
-	allowAllCongestionControl bool // do not export
 }
 
 type Client struct {
@@ -65,19 +64,23 @@ type Client struct {
 }
 
 func NewClient(options ClientOptions) (*Client, error) {
-	quicConfig := &quic.Config{
-		DisablePathMTUDiscovery: !(runtime.GOOS == "windows" || runtime.GOOS == "linux" || runtime.GOOS == "android" || runtime.GOOS == "darwin"),
-		MaxIncomingUniStreams:   1 << 60,
+	quicConfig := options.QUICConfig
+	if quicConfig == nil {
+		quicConfig = &quic.Config{
+			DisablePathMTUDiscovery: !(runtime.GOOS == "windows" || runtime.GOOS == "linux" || runtime.GOOS == "android" || runtime.GOOS == "darwin"),
+			MaxIncomingUniStreams:   1 << 60,
+		}
+		qtls.ApplyQUICOptions(quicConfig, options.QUICOptions)
 	}
-	qtls.ApplyQUICOptions(quicConfig, options.QUICOptions)
-	switch options.CongestionControl {
+	congestionControl := options.CongestionControl
+	switch congestionControl {
 	case "":
 		options.CongestionControl = "bbr"
 	case "cubic", "new_reno", "bbr", "bbr2":
+	case "bbr_meta_v1", "bbr_quiche", "bbr2_aggressive":
+		// sing-quic private names
 	default:
-		if !options.allowAllCongestionControl {
-			return nil, exceptions.New("unknown congestion control algorithm: ", options.CongestionControl)
-		}
+		return nil, exceptions.New("unknown congestion control algorithm: ", options.CongestionControl)
 	}
 	return &Client{
 		ctx:               options.Context,
@@ -87,7 +90,7 @@ func NewClient(options ClientOptions) (*Client, error) {
 		quicConfig:        quicConfig,
 		uuid:              options.UUID,
 		password:          options.Password,
-		congestionControl: options.CongestionControl,
+		congestionControl: congestionControl,
 	}, nil
 }
 
@@ -191,22 +194,24 @@ func (c *Client) offerNew(ctx context.Context) (*clientQUICConnection, error) {
 }
 
 func (c *Client) clientHandshake(conn *quic.Conn) error {
-	authStream, err := conn.OpenUniStream()
-	if err != nil {
-		return exceptions.Cause(err, "open handshake stream")
-	}
-	defer authStream.Close()
 	handshakeState := conn.ConnectionState()
 	authToken, err := handshakeState.TLS.ExportKeyingMaterial(string(c.uuid[:]), []byte(c.password), 32)
 	if err != nil {
 		return exceptions.Cause(err, "export keying material")
 	}
+	authStream, err := conn.OpenUniStream()
+	if err != nil {
+		return exceptions.Cause(err, "open handshake stream")
+	}
 	authRequest := buf.NewSize(AuthenticateLen)
-	authRequest.WriteByte(Version)
-	authRequest.WriteByte(CommandAuthenticate)
-	authRequest.Write(c.uuid[:])
-	authRequest.Write(authToken)
-	return common.Error(authStream.Write(authRequest.Bytes()))
+	common.Must(authRequest.WriteByte(Version))
+	common.Must(authRequest.WriteByte(CommandAuthenticate))
+	common.Must1(authRequest.Write(c.uuid[:]))
+	common.Must1(authRequest.Write(authToken))
+	_, err = authStream.Write(authRequest.Bytes())
+	authRequest.Release()
+	authStream.Close()
+	return err
 }
 
 func (c *Client) DialConn(ctx context.Context, destination metadata.Socksaddr) (net.Conn, error) {
@@ -304,12 +309,21 @@ func (c *clientQUICConnection) closeWithError(err error) {
 	})
 }
 
+var (
+	_ net.Conn            = (*clientConn)(nil)
+	_ network.EarlyWriter = (*clientConn)(nil)
+)
+
 type clientConn struct {
 	*quic.Stream
 	parent         *clientQUICConnection
 	destination    metadata.Socksaddr
 	requestWritten bool
 	network        int
+}
+
+func (c *clientConn) NeedHandshakeForWrite() bool {
+	return !c.requestWritten
 }
 
 func (c *clientConn) Read(b []byte) (int, error) {
@@ -320,14 +334,11 @@ func (c *clientConn) Read(b []byte) (int, error) {
 func (c *clientConn) Write(b []byte) (int, error) {
 	if !c.requestWritten {
 		request := buf.NewSize(1 + AddressSerializer.AddrPortLen(c.destination) + len(b))
-		defer request.Release()
-		request.WriteByte(byte(c.network))
-		err := AddressSerializer.WriteAddrPort(request, c.destination)
-		if err != nil {
-			return 0, wrapQUICError(err)
-		}
-		request.Write(b)
-		_, err = c.Stream.Write(request.Bytes())
+		common.Must(request.WriteByte(byte(c.network)))
+		common.Must(AddressSerializer.WriteAddrPort(request, c.destination))
+		common.Must1(request.Write(b))
+		_, err := c.Stream.Write(request.Bytes())
+		request.Release()
 		if err != nil {
 			c.parent.closeWithError(exceptions.Cause(err, "create new connection"))
 			return 0, wrapQUICError(err)
