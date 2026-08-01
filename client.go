@@ -68,7 +68,6 @@ func NewClient(options ClientOptions) (*Client, error) {
 	if quicConfig == nil {
 		quicConfig = &quic.Config{
 			DisablePathMTUDiscovery: !(runtime.GOOS == "windows" || runtime.GOOS == "linux" || runtime.GOOS == "android" || runtime.GOOS == "darwin"),
-			MaxIncomingUniStreams:   1 << 60,
 		}
 		qtls.ApplyQUICOptions(quicConfig, options.QUICOptions)
 	}
