@@ -10,7 +10,7 @@ retract (
 require (
 	github.com/sagernet/quic-go v0.61.0-sing-box-mod.1
 	github.com/sagernet/sing v0.8.5-0.20260411123740-2a8053daaf99
-	github.com/sagernet/sing-quic v0.6.2-0.20260412143638-8f65b6be7cd6
+	github.com/sagernet/sing-quic v0.6.4
 )
 
 require (
