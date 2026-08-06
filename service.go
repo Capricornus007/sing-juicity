@@ -82,7 +82,6 @@ func NewService[U comparable](options ServiceOptions) (*Service[U], error) {
 		quicConfig = &quic.Config{
 			DisablePathMTUDiscovery: !(runtime.GOOS == "windows" || runtime.GOOS == "linux" || runtime.GOOS == "android" || runtime.GOOS == "darwin"),
 			MaxIncomingStreams:      1 << 60,
-			DisablePathManager:      true,
 		}
 		qtls.ApplyQUICOptions(quicConfig, options.QUICOptions)
 	}
