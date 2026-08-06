@@ -29,7 +29,6 @@ import (
 	"github.com/sagernet/sing-quic"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/buf"
-	"github.com/sagernet/sing/common/bufio"
 	"github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/network"
@@ -172,7 +171,7 @@ func (c *Client) offerNew(ctx context.Context) (*clientQUICConnection, error) {
 		return nil, err
 	}
 	var quicConn *quic.Conn
-	quicConn, err = qtls.Dial(ctx, bufio.NewUnbindPacketConn(udpConn), udpConn.RemoteAddr(), c.tlsConfig, c.quicConfig)
+	quicConn, err = qtls.Dial(ctx, udpConn, c.tlsConfig, c.quicConfig)
 	if err != nil {
 		udpConn.Close()
 		return nil, exceptions.Cause(err, "open connection")
