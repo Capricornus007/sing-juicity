@@ -3,6 +3,7 @@ module github.com/exclavenetwork/sing-juicity
 go 1.25.0
 
 retract (
+	v0.2.0 // upstream sing-quic v0.6.4 has disappeared
 	v0.1.0-beta.5
 	v0.1.0-beta.4
 )
