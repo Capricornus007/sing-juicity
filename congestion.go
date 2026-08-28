@@ -22,9 +22,6 @@ import (
 	"time"
 
 	"github.com/sagernet/quic-go"
-	"github.com/sagernet/quic-go/congestion"
-	"github.com/sagernet/sing-quic/congestion_bbr1"
-	"github.com/sagernet/sing-quic/congestion_bbr2"
 	congestion_meta1 "github.com/sagernet/sing-quic/congestion_meta1"
 	congestion_meta2 "github.com/sagernet/sing-quic/congestion_meta2"
 	"github.com/sagernet/sing/common/ntp"
@@ -52,39 +49,12 @@ func setCongestion(ctx context.Context, connection *quic.Conn, congestionName st
 				true,
 			),
 		)
-	case "bbr_meta_v1":
-		connection.SetCongestionControl(congestion_meta1.NewBBRSender(
-			congestion_meta1.DefaultClock{TimeFunc: timeFunc},
-			connection.InitialPacketSize(),
-			congestion_meta1.InitialCongestionWindow*congestion_meta1.InitialMaxDatagramSize,
-			congestion_meta1.DefaultBBRMaxCongestionWindow*congestion_meta1.InitialMaxDatagramSize,
-		))
 	case "bbr":
-		connection.SetCongestionControl(congestion_meta2.NewBbrSender(
-			congestion_meta2.DefaultClock{TimeFunc: timeFunc},
+		// sing-quic sync upstream 4ab2ece: bbr1/bbr2/meta1 BBR senders were
+		// removed; only the meta2 BBR sender remains, configured by profile.
+		connection.SetCongestionControl(congestion_meta2.NewBbrSenderWithProfile(
 			connection.InitialPacketSize(),
-			congestion.ByteCount(congestion_meta1.InitialCongestionWindow),
-		))
-	case "bbr_quiche":
-		connection.SetCongestionControl(congestion_bbr1.NewBbrSender(
-			congestion_bbr1.DefaultClock{TimeFunc: timeFunc},
-			connection.InitialPacketSize(),
-			congestion_bbr1.InitialCongestionWindowPackets,
-			congestion_bbr1.MaxCongestionWindowPackets,
-		))
-	case "bbr2":
-		connection.SetCongestionControl(congestion_bbr2.NewBBR2Sender(
-			congestion_bbr2.DefaultClock{TimeFunc: timeFunc},
-			connection.InitialPacketSize(),
-			0,
-			false,
-		))
-	case "bbr2_aggressive":
-		connection.SetCongestionControl(congestion_bbr2.NewBBR2Sender(
-			congestion_bbr2.DefaultClock{TimeFunc: timeFunc},
-			connection.InitialPacketSize(),
-			32*connection.InitialPacketSize(),
-			true,
+			congestion_meta2.ProfileStandard,
 		))
 	}
 }
