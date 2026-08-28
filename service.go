@@ -89,9 +89,7 @@ func NewService[U comparable](options ServiceOptions) (*Service[U], error) {
 	switch congestionControl {
 	case "":
 		congestionControl = "bbr"
-	case "cubic", "new_reno", "bbr", "bbr2":
-	case "bbr_meta_v1", "bbr_quiche", "bbr2_aggressive":
-		// sing-quic private names
+	case "cubic", "new_reno", "bbr":
 	default:
 		return nil, exceptions.New("unknown congestion control algorithm: ", options.CongestionControl)
 	}

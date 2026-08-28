@@ -74,9 +74,7 @@ func NewClient(options ClientOptions) (*Client, error) {
 	switch congestionControl {
 	case "":
 		options.CongestionControl = "bbr"
-	case "cubic", "new_reno", "bbr", "bbr2":
-	case "bbr_meta_v1", "bbr_quiche", "bbr2_aggressive":
-		// sing-quic private names
+	case "cubic", "new_reno", "bbr":
 	default:
 		return nil, exceptions.New("unknown congestion control algorithm: ", options.CongestionControl)
 	}
