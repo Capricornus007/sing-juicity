@@ -1,3 +1,5 @@
+github.com/Capricornus007/sing-quic v0.6.4-0.20260828054750-f2d9d4b93a5b h1:dvusS6HreFn2qmjliI0zhwodounkZZIbhx4bOiJCb/I=
+github.com/Capricornus007/sing-quic v0.6.4-0.20260828054750-f2d9d4b93a5b/go.mod h1:ZZqD2XqAs9DhH6fUOEsHuA6kVIHNi7derWxysPViuAw=
 github.com/andybalholm/brotli v1.0.6 h1:Yf9fFpf49Zrxb9NlQaluyE92/+X7UVHlhMNJN2sxfOI=
 github.com/andybalholm/brotli v1.0.6/go.mod h1:fO7iG3H7G2nSZ7m0zPUDn85XEX2GTukHGRSepvi9Eig=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
