@@ -1,5 +1,5 @@
-github.com/Capricornus007/sing-quic v0.6.4-0.20260828054750-f2d9d4b93a5b h1:dvusS6HreFn2qmjliI0zhwodounkZZIbhx4bOiJCb/I=
-github.com/Capricornus007/sing-quic v0.6.4-0.20260828054750-f2d9d4b93a5b/go.mod h1:ZZqD2XqAs9DhH6fUOEsHuA6kVIHNi7derWxysPViuAw=
+github.com/Capricornus007/sing-quic v0.6.4-0.20260901065507-dce38ce71fc6 h1:PaVjW0OEwyr156t7CB7rcc0cFKeCCmcHkeDPkJHyx7w=
+github.com/Capricornus007/sing-quic v0.6.4-0.20260901065507-dce38ce71fc6/go.mod h1:M9Njt4Y0Bzgte1jDpuoA+eYq+SFZo4HtFWmntXRDbN0=
 github.com/andybalholm/brotli v1.0.6 h1:Yf9fFpf49Zrxb9NlQaluyE92/+X7UVHlhMNJN2sxfOI=
 github.com/andybalholm/brotli v1.0.6/go.mod h1:fO7iG3H7G2nSZ7m0zPUDn85XEX2GTukHGRSepvi9Eig=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
@@ -12,8 +12,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/quic-go/qpack v0.6.0 h1:g7W+BMYynC1LbYLSqRt8PBg5Tgwxn214ZZR34VIOjz8=
 github.com/quic-go/qpack v0.6.0/go.mod h1:lUpLKChi8njB4ty2bFLX2x4gzDqXwUpaO1DP9qMDZII=
-github.com/sagernet/quic-go v0.61.0-sing-box-mod.6 h1:67bgUBU2QKK6jNz46GB5919wwRHcOHSafgmhD2gVf2Y=
-github.com/sagernet/quic-go v0.61.0-sing-box-mod.6/go.mod h1:hmLC8GJPp+BrpBgrgJnacvI4fZGIhasuy1ROJJ8GR4E=
+github.com/sagernet/quic-go v0.61.0-sing-box-mod.7 h1:sW2O+DoNF+my1PGlSZ3zG2N+fdxLR3DC0l4sXCM0lBE=
+github.com/sagernet/quic-go v0.61.0-sing-box-mod.7/go.mod h1:hmLC8GJPp+BrpBgrgJnacvI4fZGIhasuy1ROJJ8GR4E=
 github.com/sagernet/sing v0.9.0-beta.4 h1:DYoEzb3FeCZ9bA66hJmL0NFDXckZpa4oYF/VpbFJEkE=
 github.com/sagernet/sing v0.9.0-beta.4/go.mod h1:K3Owt3xPhHugvlnlPPxZJ/exXdaJfEPOTNorGk4AXjo=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
