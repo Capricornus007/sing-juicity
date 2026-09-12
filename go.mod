@@ -11,7 +11,7 @@ retract (
 require (
 	github.com/sagernet/quic-go v0.61.0-sing-box-mod.7
 	github.com/sagernet/sing v0.9.0-beta.4
-	github.com/sagernet/sing-quic v0.7.0-beta.1
+	github.com/sagernet/sing-quic v0.7.1-0.20260904135313-497364e8ee3e
 )
 
 require (
@@ -26,4 +26,4 @@ require (
 	golang.org/x/text v0.40.0 // indirect
 )
 
-replace github.com/sagernet/sing-quic => github.com/Capricornus007/sing-quic v0.6.4-0.20260901065507-dce38ce71fc6
+replace github.com/sagernet/sing-quic => github.com/Capricornus007/sing-quic v0.0.0-20260905061045-2f044ea1dc3d

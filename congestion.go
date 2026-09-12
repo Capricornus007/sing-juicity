@@ -32,12 +32,13 @@ func setCongestion(ctx context.Context, connection *quic.Conn, congestionName st
 	if timeFunc == nil {
 		timeFunc = time.Now
 	}
+	initialPacketSize := connection.InitialPacketSize()
 	switch congestionName {
 	case "cubic":
 		connection.SetCongestionControl(
 			congestion_meta1.NewCubicSender(
 				congestion_meta1.DefaultClock{TimeFunc: timeFunc},
-				connection.InitialPacketSize(),
+				initialPacketSize,
 				false,
 			),
 		)
@@ -45,7 +46,7 @@ func setCongestion(ctx context.Context, connection *quic.Conn, congestionName st
 		connection.SetCongestionControl(
 			congestion_meta1.NewCubicSender(
 				congestion_meta1.DefaultClock{TimeFunc: timeFunc},
-				connection.InitialPacketSize(),
+				initialPacketSize,
 				true,
 			),
 		)

@@ -21,8 +21,10 @@ import (
 	"context"
 	"io"
 	"net"
+	"os"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sagernet/quic-go"
@@ -59,6 +61,7 @@ type Client struct {
 
 	connAccess sync.Mutex
 	conn       *clientQUICConnection
+	closeIdle  atomic.Bool
 	pending    *clientOffer
 }
 
@@ -116,7 +119,7 @@ func (c *Client) offer(ctx context.Context) (*clientQUICConnection, error) {
 	if offerCtx == nil {
 		offerCtx = context.Background()
 	}
-	offerCtx, cancel := common.ContextWithCancelCause(offerCtx)
+	offerCtx, cancel := context.WithCancelCause(offerCtx)
 	pending = &clientOffer{
 		done:   make(chan struct{}),
 		cancel: cancel,
@@ -176,9 +179,10 @@ func (c *Client) offerNew(ctx context.Context) (*clientQUICConnection, error) {
 	}
 	setCongestion(c.ctx, quicConn, c.congestionControl)
 	conn := &clientQUICConnection{
-		quicConn: quicConn,
-		rawConn:  udpConn,
-		connDone: make(chan struct{}),
+		quicConn:  quicConn,
+		rawConn:   udpConn,
+		connDone:  make(chan struct{}),
+		closeIdle: &c.closeIdle,
 	}
 	go func() {
 		hErr := c.clientHandshake(quicConn)
@@ -215,8 +219,13 @@ func (c *Client) DialConn(ctx context.Context, destination metadata.Socksaddr) (
 	if err != nil {
 		return nil, err
 	}
+	err = conn.acquireStream()
+	if err != nil {
+		return nil, err
+	}
 	stream, err := conn.quicConn.OpenStream()
 	if err != nil {
+		conn.releaseStream(false)
 		return nil, err
 	}
 	return &clientConn{
@@ -224,6 +233,7 @@ func (c *Client) DialConn(ctx context.Context, destination metadata.Socksaddr) (
 		parent:      conn,
 		destination: destination,
 		network:     NetworkTCP,
+		keepSession: qtls.KeepSessionFromContext(ctx),
 	}, nil
 }
 
@@ -232,8 +242,13 @@ func (c *Client) ListenPacket(ctx context.Context, destination metadata.Socksadd
 	if err != nil {
 		return nil, err
 	}
+	err = conn.acquireStream()
+	if err != nil {
+		return nil, err
+	}
 	stream, err := conn.quicConn.OpenStream()
 	if err != nil {
+		conn.releaseStream(false)
 		return nil, err
 	}
 	return &udpPacketConn{
@@ -242,6 +257,7 @@ func (c *Client) ListenPacket(ctx context.Context, destination metadata.Socksadd
 			parent:      conn,
 			destination: destination,
 			network:     NetworkUDP,
+			keepSession: qtls.KeepSessionFromContext(ctx),
 		},
 	}, nil
 }
@@ -265,6 +281,28 @@ func (c *Client) CloseWithError(err error) error {
 	return nil
 }
 
+func (c *Client) SetKeepIdleConnections(keep bool) {
+	c.closeIdle.Store(!keep)
+	if !keep {
+		c.CloseIdleConnections()
+	}
+}
+
+func (c *Client) CloseIdleConnections() {
+	c.connAccess.Lock()
+	conn := c.conn
+	c.connAccess.Unlock()
+	if conn == nil {
+		return
+	}
+	conn.access.Lock()
+	drained := conn.streams == 0
+	conn.access.Unlock()
+	if drained {
+		conn.closeWithError(os.ErrClosed)
+	}
+}
+
 type clientOffer struct {
 	done      chan struct{}
 	cancel    func(error)
@@ -280,6 +318,9 @@ type clientQUICConnection struct {
 	closeOnce sync.Once
 	connDone  chan struct{}
 	connErr   error
+	access    sync.RWMutex
+	streams   int
+	closeIdle *atomic.Bool
 }
 
 func (c *clientQUICConnection) active() bool {
@@ -294,6 +335,28 @@ func (c *clientQUICConnection) active() bool {
 	default:
 	}
 	return true
+}
+
+func (c *clientQUICConnection) acquireStream() error {
+	c.access.Lock()
+	defer c.access.Unlock()
+	select {
+	case <-c.connDone:
+		return exceptions.Errors(c.connErr, os.ErrClosed)
+	default:
+	}
+	c.streams++
+	return nil
+}
+
+func (c *clientQUICConnection) releaseStream(keepSession bool) {
+	c.access.Lock()
+	c.streams--
+	drained := c.closeIdle.Load() && !keepSession && c.streams == 0
+	c.access.Unlock()
+	if drained {
+		c.closeWithError(os.ErrClosed)
+	}
 }
 
 func (c *clientQUICConnection) closeWithError(err error) {
@@ -316,6 +379,8 @@ type clientConn struct {
 	destination    metadata.Socksaddr
 	requestWritten bool
 	network        int
+	keepSession    bool
+	closeOnce      sync.Once
 }
 
 func (c *clientConn) NeedHandshakeForWrite() bool {
@@ -352,6 +417,7 @@ func (c *clientConn) Close() error {
 	// quic-go's Stream.Close does not unblock a Write blocked on flow control,
 	// but a past write deadline does; buffered data and the FIN are unaffected.
 	c.Stream.SetWriteDeadline(time.Now())
+	c.closeOnce.Do(func() { c.parent.releaseStream(c.keepSession) })
 	return err
 }
 
