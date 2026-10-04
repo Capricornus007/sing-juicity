@@ -135,6 +135,18 @@ func (c *Client) offer(ctx context.Context) (*clientQUICConnection, error) {
 	}
 }
 
+func (c *Client) offerWithStream(ctx context.Context) (*clientQUICConnection, error) {
+	for {
+		conn, err := c.offer(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if conn.acquireStream() {
+			return conn, nil
+		}
+	}
+}
+
 func (c *Client) completeOffer(pending *clientOffer, offerCtx context.Context) {
 	conn, err := c.offerNew(offerCtx)
 	pending.cancel(nil)
@@ -215,11 +227,7 @@ func (c *Client) clientHandshake(conn *quic.Conn) error {
 }
 
 func (c *Client) DialConn(ctx context.Context, destination metadata.Socksaddr) (net.Conn, error) {
-	conn, err := c.offer(ctx)
-	if err != nil {
-		return nil, err
-	}
-	err = conn.acquireStream()
+	conn, err := c.offerWithStream(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -238,11 +246,7 @@ func (c *Client) DialConn(ctx context.Context, destination metadata.Socksaddr) (
 }
 
 func (c *Client) ListenPacket(ctx context.Context, destination metadata.Socksaddr) (net.PacketConn, error) {
-	conn, err := c.offer(ctx)
-	if err != nil {
-		return nil, err
-	}
-	err = conn.acquireStream()
+	conn, err := c.offerWithStream(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -296,10 +300,10 @@ func (c *Client) CloseIdleConnections() {
 		return
 	}
 	conn.access.Lock()
-	drained := conn.streams == 0
+	closed := conn.streams == 0 && conn.markClosedLocked(os.ErrClosed)
 	conn.access.Unlock()
-	if drained {
-		conn.closeWithError(os.ErrClosed)
+	if closed {
+		conn.closeTransport()
 	}
 }
 
@@ -315,7 +319,6 @@ type clientOffer struct {
 type clientQUICConnection struct {
 	quicConn  *quic.Conn
 	rawConn   io.Closer
-	closeOnce sync.Once
 	connDone  chan struct{}
 	connErr   error
 	access    sync.RWMutex
@@ -337,35 +340,52 @@ func (c *clientQUICConnection) active() bool {
 	return true
 }
 
-func (c *clientQUICConnection) acquireStream() error {
+func (c *clientQUICConnection) acquireStream() bool {
 	c.access.Lock()
 	defer c.access.Unlock()
 	select {
 	case <-c.connDone:
-		return exceptions.Errors(c.connErr, os.ErrClosed)
+		return false
 	default:
 	}
 	c.streams++
-	return nil
+	return true
 }
 
 func (c *clientQUICConnection) releaseStream(keepSession bool) {
 	c.access.Lock()
 	c.streams--
-	drained := c.closeIdle.Load() && !keepSession && c.streams == 0
+	closed := c.closeIdle.Load() && !keepSession && c.streams == 0 && c.markClosedLocked(os.ErrClosed)
 	c.access.Unlock()
-	if drained {
-		c.closeWithError(os.ErrClosed)
+	if closed {
+		c.closeTransport()
 	}
 }
 
+func (c *clientQUICConnection) markClosedLocked(err error) bool {
+	select {
+	case <-c.connDone:
+		return false
+	default:
+	}
+	c.connErr = err
+	close(c.connDone)
+	return true
+}
+
 func (c *clientQUICConnection) closeWithError(err error) {
-	c.closeOnce.Do(func() {
-		c.connErr = err
-		close(c.connDone)
-		_ = c.quicConn.CloseWithError(0, "")
-		_ = c.rawConn.Close()
-	})
+	c.access.Lock()
+	if !c.markClosedLocked(err) {
+		c.access.Unlock()
+		return
+	}
+	c.access.Unlock()
+	c.closeTransport()
+}
+
+func (c *clientQUICConnection) closeTransport() {
+	_ = c.quicConn.CloseWithError(0, "")
+	_ = c.rawConn.Close()
 }
 
 var (
